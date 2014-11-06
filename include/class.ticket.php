@@ -1851,6 +1851,43 @@ class Ticket {
                 'references' => $response->getEmailReferences(),
                 'thread'=>$response);
 
+        // BEGIN HCS MOD
+
+        // collect all relevant history entries. For now this means messages
+        // from the end user and responses from agents. This does not include
+        // transfers or internal notes or any ticketing specific details.
+        $entries = array();
+
+        foreach($this->getThread()->getResponses() as $value) {
+            $entries[$value['created']] = $value['id'];
+        }
+
+        foreach($this->getThread()->getMessages() as $value) {
+            $entries[$value['created']] = $value['id'];
+        }
+
+        // sort entries in reverse chronological order and remove the most
+        // recent (i.e. the response that is being sent right now)
+        krsort($entries);
+        array_shift($entries);
+
+        // Build a history string from all the entries with details about the
+        // user and date sent.
+        $history = "";
+        foreach($entries as $eid) {
+            $entry = $this->getThread()->getEntry($eid);
+            $create_date = $entry->getCreateDate();
+            $user = $entry->getUser()->getName();
+            if (!$user) {
+                $user = $entry->getStaff()->getName();
+            }
+
+            $history .= "> On " . $create_date . ", " . $user . " wrote:<br />\n>" . $entry->getBody()."<br />\n><br />\n";
+        }
+
+        $variables['thread_history'] = $history;
+        // END HCS MOD
+
         if(($email=$dept->getEmail())
                 && ($tpl = $dept->getTemplate())
                 && ($msg=$tpl->getReplyMsgTemplate())) {
