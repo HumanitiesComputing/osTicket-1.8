@@ -288,6 +288,17 @@ class Mailer {
         $mail = mail::factory('mail');
         return PEAR::isError($mail->send($to, $headers, $body))?false:$messageId;
 
+        /*
+        Enable for email debugging
+
+        $encoded_headers = "";
+        foreach($headers as $key => $value) {
+            $encoded_headers .= "$key: $value\r\n";
+        }
+
+        file_put_contents("/tmp/email.eml", $encoded_headers."\r\n".$body);
+        */
+
     }
 
     function logError($error) {
