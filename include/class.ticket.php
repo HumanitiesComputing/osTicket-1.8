@@ -1877,10 +1877,7 @@ class Ticket {
         foreach($entries as $eid) {
             $entry = $this->getThread()->getEntry($eid);
             $create_date = $entry->getCreateDate();
-            $user = $entry->getUser()->getName();
-            if (!$user) {
-                $user = $entry->getStaff()->getName();
-            }
+            $user = $entry->getPoster();
 
             $history .= "> On " . $create_date . ", " . $user . " wrote:<br />\n>" . $entry->getBody()."<br />\n><br />\n";
         }
