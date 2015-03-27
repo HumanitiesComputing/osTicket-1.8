@@ -214,6 +214,10 @@ class OsticketConfig extends Config {
         return ($this->get('enable_kb') && FAQ::countPublishedFAQs());
     }
 
+    function isCannedResponseEnabled() {
+        return $this->get('enable_premade');
+    }
+
     function getVersion() {
         return THIS_VERSION;
     }
@@ -1013,6 +1017,13 @@ class OsticketConfig extends Config {
         return $this->getLogoId('client');
     }
 
+    function getStaffLogoId() {
+        return $this->getLogoId('staff');
+    }
+    function getStaffLogo() {
+        return $this->getLogo('staff');
+    }
+
     function updatePagesSettings($vars, &$errors) {
         global $ost;
 
@@ -1056,6 +1067,9 @@ class OsticketConfig extends Config {
             'client_logo_id' => (
                 (is_numeric($vars['selected-logo']) && $vars['selected-logo'])
                 ? $vars['selected-logo'] : false),
+            'staff_logo_id' => (
+                (is_numeric($vars['selected-logo-scp']) && $vars['selected-logo-scp'])
+                ? $vars['selected-logo-scp'] : false),
            ));
     }
 

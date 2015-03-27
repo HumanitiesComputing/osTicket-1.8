@@ -30,7 +30,7 @@ class Form {
         $this->fields = $fields;
         foreach ($fields as $k=>$f) {
             $f->setForm($this);
-            if (!$f->get('name') && $k)
+            if (!$f->get('name') && $k && !is_numeric($k))
                 $f->set('name', $k);
         }
         if (isset($options['title']))
@@ -946,27 +946,33 @@ class ChoiceField extends FormField {
 
     function to_php($value) {
         if (is_string($value))
-            $array = JsonDataParser::parse($value) ?: $value;
-        else
-            $array = $value;
-        $config = $this->getConfiguration();
-        if (!$config['multiselect']) {
-            if (is_array($array) && count($array) < 2) {
-                reset($array);
-                return key($array);
+            $value = JsonDataParser::parse($value) ?: $value;
+
+        // CDATA table may be built with comma-separated key,value,key,value
+        if (is_string($value)) {
+            $values = array();
+            $choices = $this->getChoices();
+            foreach (explode(',', $value) as $V) {
+                if (isset($choices[$V]))
+                    $values[$V] = $choices[$V];
             }
-            if (is_string($array) && strpos($array, ',') !== false) {
-                list($array,) = explode(',', $array, 2);
-            }
+            if (array_filter($values))
+                $value = $values;
         }
-        return $array;
+        $config = $this->getConfiguration();
+        if (!$config['multiselect'] && is_array($value) && count($value) < 2) {
+            reset($value);
+            $value = key($value);
+        }
+        return $value;
     }
 
     function toString($value) {
-        $selection = $this->getChoice($value);
-        return is_array($selection)
-            ? (implode(', ', array_filter($selection)) ?: $value)
-            : (string) $selection;
+        if (!is_array($value))
+            $value = $this->getChoice($value);
+        if (is_array($value))
+            return implode(', ', $value);
+        return (string) $value;
     }
 
     function getChoice($value) {
@@ -1160,8 +1166,8 @@ class ThreadEntryField extends FormField {
 }
 
 class PriorityField extends ChoiceField {
-    function getWidget() {
-        $widget = parent::getWidget();
+    function getWidget($widgetClass=false) {
+        $widget = parent::getWidget($widgetClass);
         if ($widget->value instanceof Priority)
             $widget->value = $widget->value->getId();
         return $widget;
@@ -1175,13 +1181,10 @@ class PriorityField extends ChoiceField {
             $this->get('name') != 'priority';
     }
 
-    function getChoices() {
-        global $cfg;
-        $this->ht['default'] = $cfg->getDefaultPriorityId();
-
+    function getChoices($verbose=false) {
         $sql = 'SELECT priority_id, priority_desc FROM '.PRIORITY_TABLE
               .' ORDER BY priority_urgency DESC';
-        $choices = array();
+        $choices = array('' => '— '.__('Default').' —');
         if (!($res = db_query($sql)))
             return $choices;
 
@@ -1199,7 +1202,10 @@ class PriorityField extends ChoiceField {
             reset($id);
             $id = key($id);
         }
-        return Priority::lookup($id);
+        elseif ($id === false)
+            $id = $value;
+        if ($id)
+            return Priority::lookup($id);
     }
 
     function to_database($prio) {
@@ -1218,13 +1224,30 @@ class PriorityField extends ChoiceField {
     }
 
     function getConfigurationOptions() {
+        $choices = $this->getChoices();
+        $choices[''] = __('System Default');
         return array(
             'prompt' => new TextboxField(array(
                 'id'=>2, 'label'=>__('Prompt'), 'required'=>false, 'default'=>'',
                 'hint'=>__('Leading text shown before a value is selected'),
                 'configuration'=>array('size'=>40, 'length'=>40),
             )),
+            'default' => new ChoiceField(array(
+                'id'=>3, 'label'=>__('Default'), 'required'=>false, 'default'=>'',
+                'choices' => $choices,
+                'hint'=>__('Default selection for this field'),
+                'configuration'=>array('size'=>20, 'length'=>40),
+            )),
         );
+    }
+
+    function getConfiguration() {
+        global $cfg;
+
+        $config = parent::getConfiguration();
+        if (!isset($config['default']))
+            $config['default'] = $cfg->getDefaultPriorityId();
+        return $config;
     }
 }
 FormField::addFieldTypes(/*@trans*/ 'Dynamic Fields', function() {
@@ -1266,7 +1289,7 @@ class TicketStateField extends ChoiceField {
         return false;
     }
 
-    function getChoices() {
+    function getChoices($verbose=false) {
         static $_choices;
 
         if (!isset($_choices)) {
@@ -1350,7 +1373,7 @@ class TicketFlagField extends ChoiceField {
         return true;
     }
 
-    function getChoices() {
+    function getChoices($verbose=false) {
         $this->ht['default'] =  '';
 
         if (!$this->_choices) {
@@ -1581,6 +1604,10 @@ class FileUploadField extends FormField {
                 else {
                     if ($ext[0] != '.')
                         $ext = '.' . $ext;
+
+                    // Ensure that the extension is lower-cased for comparison latr
+                    $ext = strtolower($ext);
+
                     // Add this to the MIME types list so it can be exported to
                     // the @accept attribute
                     if (!isset($extensions[$ext]))
@@ -1637,10 +1664,8 @@ class FileUploadField extends FormField {
     function display($value) {
         $links = array();
         foreach ($this->getFiles() as $f) {
-            $hash = strtolower($f['key']
-                . md5($f['id'].session_id().strtolower($f['key'])));
-            $links[] = sprintf('<a class="no-pjax" href="file.php?h=%s">%s</a>',
-                $hash, Format::htmlchars($f['name']));
+            $links[] = sprintf('<a class="no-pjax" href="%s">%s</a>',
+                Format::htmlchars($f['download_url']), Format::htmlchars($f['name']));
         }
         return implode('<br/>', $links);
     }
@@ -1835,7 +1860,7 @@ class ChoicesWidget extends Widget {
         }
 
         $values = $this->value;
-        if (!is_array($values) && $values) {
+        if (!is_array($values) && isset($values)) {
             $values = array($values => $this->field->getChoice($values));
         }
 
@@ -1874,9 +1899,12 @@ class ChoicesWidget extends Widget {
     }
 
     function getValue() {
-        $value = parent::getValue();
 
-        if (!$value) return null;
+        if (!($value = parent::getValue()))
+            return null;
+
+        if ($value && !is_array($value))
+            $value = array($value);
 
         // Assume multiselect
         $values = array();
@@ -1887,6 +1915,7 @@ class ChoicesWidget extends Widget {
                     $values[$v] = $choices[$v];
             }
         }
+
         return $values;
     }
 
@@ -2086,6 +2115,7 @@ class FileUploadWidget extends Widget {
                     'name' => $file->getName(),
                     'type' => $file->getType(),
                     'size' => $file->getSize(),
+                    'download_url' => $file->getDownloadUrl(),
                 );
             }
         }

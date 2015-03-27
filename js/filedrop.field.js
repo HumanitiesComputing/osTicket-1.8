@@ -180,11 +180,12 @@
       }
       if (file.id)
         filenode.data('fileId', file.id);
-      if (file.download)
+      if (file.download_url) {
         filenode.find('.filename').prepend(
           $('<a class="no-pjax" target="_blank"></a>').text(file.name)
-            .attr('href', 'file.php?h='+escape(file.download))
+            .attr('href', file.download_url)
         );
+      }
       else
         filenode.find('.filename').prepend($('<span>').text(file.name));
       this.$element.parent().find('.files').append(filenode);
@@ -329,7 +330,8 @@
       globalProgressUpdated: empty,
       speedUpdated: empty
       },
-      errors = ["BrowserNotSupported", "TooManyFiles", "FileTooLarge", "FileTypeNotAllowed", "NotFound", "NotReadable", "AbortError", "ReadError", "FileExtensionNotAllowed"];
+      errors = ["BrowserNotSupported", "TooManyFiles", "FileTooLarge", "FileTypeNotAllowed", "NotFound", "NotReadable", "AbortError", "ReadError", "FileExtensionNotAllowed"],
+      Blob = window.WebKitBlob || window.MozBlob || window.Blob;
 
   $.fn.filedrop = function(options) {
     var opts = $.extend({}, default_opts, options),
@@ -379,8 +381,7 @@
       var dashdash = '--',
           crlf = '\r\n',
           builder = [],
-          paramname = opts.paramname,
-          Blob = window.WebKitBlob || window.Blob;
+          paramname = opts.paramname;
 
       if (opts.data) {
         var params = $.param(opts.data).replace(/\+/g, '%20').split(/&/);
@@ -473,6 +474,10 @@
       stop_loop = false;
 
       if (!files) {
+        opts.error(errors[0]);
+        return false;
+      }
+      if (typeof Blob === "undefined") {
         opts.error(errors[0]);
         return false;
       }
