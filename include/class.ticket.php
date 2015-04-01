@@ -1161,7 +1161,10 @@ class Ticket {
         // We're also checking autorespond flag because we don't want to
         // reopen closed tickets on auto-reply from end user. This is not to
         // confused with autorespond on new message setting
-        if ($autorespond && $this->isClosed() && $this->isReopenable())
+        //
+        // TEMPORARILY DISABLING THE AUTORESPOND CHECK because it results
+        // in no tickets ever being re-opened.
+        if (/*$autorespond &&*/ $this->isClosed() && $this->isReopenable())
             $this->reopen();
 
        /**********   double check auto-response  ************/
